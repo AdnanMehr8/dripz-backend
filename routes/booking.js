@@ -7,7 +7,7 @@ const Cart = require( "../models/Cart");
 const Stripe = require( 'stripe');
 const User = require( "../models/User");
 const Order = require('../models/Order')
-const stripe = require('stripe')('sk_test_51PkLk22NEMxq5ucjMcqBZZ8em8euGGCUCbeR4vC96KEQRcgd82FXE3wKkTiMv7MMyacr1L5s74Gyxo2gUTPMllqO00MfafqNAP');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const router = express.Router();
 
