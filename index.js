@@ -12,13 +12,15 @@ const profileRouter = require('./routes/Profile');
 const cartRouter = require('./routes/Cart');
 const cookieParser = require('cookie-parser');
 const orderRouter = require('./routes/booking')
+const pathe = require('path');
+const path = require('path');
 const app = express();
 
 // Use cookie-parser middleware
 app.use(cookieParser());
 
 app.use(cors({
-  origin: 'http://localhost:3000', // Your frontend origin
+  origin: 'http://localhost:3000', 
   credentials: true // Allow credentials
 }));
 const apiLimiter = rateLimit({
@@ -65,4 +67,10 @@ app.use((err, req, res, next) => {
 });
 
 const server = new Server(app); // Create the HTTP server using Express app
+
+// app.get('*', (req,res ) => {
+//   app.use(express.static(path.resolve(__dirname, "dripz-frontend", "build")));
+//   res.sendFile(path.resolve(__dirname, "dripz-frontend", "build", "index.html"))
+// });
+
 server.listen(process.env.PORT, () => console.log(`Server started on port ${process.env.PORT}`)); // Start the server
