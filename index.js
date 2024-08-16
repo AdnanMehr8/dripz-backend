@@ -22,7 +22,8 @@ const app = express();
 app.use(cookieParser());
 
 app.use(cors({
-  origin: 'http://localhost:3000', 
+  origin: 'https://dripz-frontend.vercel.app', 
+  // origin: 'http://localhost:3000', 
   credentials: true // Allow credentials
 }));
 const apiLimiter = rateLimit({
