@@ -17,6 +17,7 @@ const productSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  imageAngles : [String],
   gender: {
     type: String,
     enum: ['men', 'women'],

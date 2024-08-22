@@ -37,6 +37,7 @@ const productSchema = Joi.object({
   description: Joi.string(),
   price: Joi.number().required(),
   image: Joi.string().optional(),
+  imageAngles: Joi.array().items(Joi.string()).optional(),
   gender: Joi.string().valid('men', 'women').required(),
   categories: Joi.string().required(),
   sizes: Joi.string().required(),
@@ -74,8 +75,21 @@ router.get('/products', async (req, res) => {
 
 router.get('/all-products', async (req, res) => {
   try {
-    const products = await Product.find().populate('categories');
-    res.json(products);
+    const { _limit = 9, _page = 1 } = req.query;
+
+    const products = await Product.find()
+    .skip((parseInt(_page) - 1) * parseInt(_limit))
+    .limit(parseInt(_limit))
+    .populate('categories');
+
+    const totalProducts = await Product.countDocuments();
+
+    res.json({
+      products,
+      totalProducts,
+      totalPages: Math.ceil(totalProducts / _limit),
+      currentPage: parseInt(_page)
+    });
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Server Error');
@@ -97,7 +111,7 @@ router.get('/products/:id', async (req, res) => {
 });
 
 // Create a new product
-router.post('/products', upload.single('image'), async (req, res) => {
+router.post('/products', upload.array('imageAngles', 5), async (req, res) => {
   try {
       const { error } = productSchema.validate(req.body);
       if (error) {
@@ -106,21 +120,24 @@ router.post('/products', upload.single('image'), async (req, res) => {
 
       const { title, description, price, gender, categories, sizes, colors, inventory } = req.body;
 
-      // Check if the file was uploaded
-      if (!req.file) {
-          return res.status(400).json({ message: 'Image file is required' });
+      // Check if files were uploaded
+      if (!req.files || req.files.length === 0) {
+          return res.status(400).json({ message: 'Image files are required' });
       }
 
-      // Upload the image to Cloudinary
-      const cloudinaryResponse = await cloudinary.uploader.upload(req.file.path);
-      const imageUrl = cloudinaryResponse.secure_url;
+      // Upload images to Cloudinary
+      const imageUploadPromises = req.files.map(file => cloudinary.uploader.upload(file.path));
+      const cloudinaryResponses = await Promise.all(imageUploadPromises);
+
+      const imageUrls = cloudinaryResponses.map(response => response.secure_url);
 
       // Create a new product
       const product = new Product({
           title,
           description,
           price,
-          image: imageUrl,
+          image: imageUrls[0],
+          imageAngles: imageUrls.slice(1),
           gender,
           categories,
           sizes,
@@ -130,10 +147,12 @@ router.post('/products', upload.single('image'), async (req, res) => {
 
       await product.save();
 
-      // Delete the local file after upload
-      fs.unlink(req.file.path, (err) => {
-          if (err) console.log(err);
-          else console.log("Deleted file");
+      // Delete local files
+      req.files.forEach(file => {
+          fs.unlink(file.path, err => {
+              if (err) console.log(err);
+              else console.log("Deleted file");
+          });
       });
 
       res.status(201).json(product);
@@ -143,30 +162,76 @@ router.post('/products', upload.single('image'), async (req, res) => {
   }
 });
 
-router.put('/products/:id', async (req, res) => {
+// router.post('/products', upload.single('image'), async (req, res) => {
+//   try {
+//       const { error } = productSchema.validate(req.body);
+//       if (error) {
+//           return res.status(400).json(error.details);
+//       }
+
+//       const { title, description, price, gender, categories, sizes, colors, inventory } = req.body;
+
+//       // Check if the file was uploaded
+//       if (!req.file) {
+//           return res.status(400).json({ message: 'Image file is required' });
+//       }
+
+//       // Upload the image to Cloudinary
+//       const cloudinaryResponse = await cloudinary.uploader.upload(req.file.path);
+//       const imageUrl = cloudinaryResponse.secure_url;
+
+//       // Create a new product
+//       const product = new Product({
+//           title,
+//           description,
+//           price,
+//           image: imageUrl,
+//           gender,
+//           categories,
+//           sizes,
+//           colors,
+//           inventory,
+//       });
+
+//       await product.save();
+
+//       // Delete the local file after upload
+//       fs.unlink(req.file.path, (err) => {
+//           if (err) console.log(err);
+//           else console.log("Deleted file");
+//       });
+
+//       res.status(201).json(product);
+//   } catch (err) {
+//       console.error(err.message);
+//       res.status(500).send('Server Error');
+//   }
+// });
+
+router.put('/products/:id', upload.array('imageAngles', 5), async (req, res) => {
   try {
     const { error } = productSchema.validate(req.body);
     if (error) {
       return res.status(400).json(error.details);
     }
 
-    const { title, description, price, gender, categories, sizes, colors, inventory, image } = req.body;
-  
+    const { title, description, price, gender, categories, sizes, colors, inventory } = req.body;
 
- 
-      try {
-        const response = await cloudinary.uploader.upload(image);
-       
-      } catch (error) {
-        return res.status(500).json({ message: 'Image upload failed', error: error.message });
-      }
-    
+    // Process the uploaded images
+    let imageUrls = [];
+    if (req.files.length > 0) {
+      const imageUploadPromises = req.files.map(file => cloudinary.uploader.upload(file.path));
+      const cloudinaryResponses = await Promise.all(imageUploadPromises);
+      imageUrls = cloudinaryResponses.map(response => response.secure_url);
+    }
 
+    // Update the product
     const updatedProduct = await Product.findByIdAndUpdate(req.params.id, {
       title,
       description,
       price,
-      imagePath: imagePath || undefined,
+      image: imageUrls[0] || undefined, // Primary image
+      imageAngles: imageUrls.slice(1) || undefined, // Additional images
       gender,
       categories,
       sizes,
@@ -174,12 +239,58 @@ router.put('/products/:id', async (req, res) => {
       inventory,
     }, { new: true });
 
+    // Delete the local files after upload
+    req.files.forEach(file => {
+      fs.unlink(file.path, err => {
+        if (err) console.log(err);
+        else console.log("Deleted file");
+      });
+    });
+
     res.status(200).json(updatedProduct);
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Server Error');
   }
 });
+
+// router.put('/products/:id', async (req, res) => {
+//   try {
+//     const { error } = productSchema.validate(req.body);
+//     if (error) {
+//       return res.status(400).json(error.details);
+//     }
+
+//     const { title, description, price, gender, categories, sizes, colors, inventory, image } = req.body;
+  
+
+ 
+//       try {
+//         const response = await cloudinary.uploader.upload(image);
+       
+//       } catch (error) {
+//         return res.status(500).json({ message: 'Image upload failed', error: error.message });
+//       }
+    
+
+//     const updatedProduct = await Product.findByIdAndUpdate(req.params.id, {
+//       title,
+//       description,
+//       price,
+//       imagePath: imagePath || undefined,
+//       gender,
+//       categories,
+//       sizes,
+//       colors,
+//       inventory,
+//     }, { new: true });
+
+//     res.status(200).json(updatedProduct);
+//   } catch (err) {
+//     console.error(err.message);
+//     res.status(500).send('Server Error');
+//   }
+// });
 
 // Delete a product
 router.delete('/products/:id', async (req, res) => {

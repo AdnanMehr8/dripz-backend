@@ -115,14 +115,17 @@ router.put('/cart/update/:productId', authenticate, checkUser, async (req, res) 
 
 
 // Remove item from the cart
-router.delete('/cart/remove/:productId',authenticate, checkUser, async (req, res) => {
+router.delete('/cart/remove/:productId', authenticate, checkUser, async (req, res) => {
   try {
     const cart = await Cart.findOne({ userId: req.user.id });
     if (!cart) {
       return res.status(404).json({ msg: 'Cart not found' });
     }
 
-    const itemIndex = cart.items.findIndex(item => item.productId.toString() === req.params.productId);
+    // Convert productId to string for comparison
+    const productIdToRemove = req.params.productId.toString();
+
+    const itemIndex = cart.items.findIndex(item => item.productId.toString() === productIdToRemove);
     if (itemIndex === -1) {
       return res.status(404).json({ msg: 'Item not found in cart' });
     }
@@ -131,7 +134,30 @@ router.delete('/cart/remove/:productId',authenticate, checkUser, async (req, res
     cart.updatedAt = Date.now();
     await cart.save();
 
+    // Populate the product details before sending the response
+    await cart.populate('items.productId');
+
     res.json(cart);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server Error');
+  }
+});
+
+router.delete('/cart/clear', authenticate, checkUser, async (req, res) => {
+  try {
+    // Find the cart for the user
+    const cart = await Cart.findOne({ userId: req.user.id });
+    
+    if (!cart) {
+      return res.status(404).json({ msg: 'Cart not found' });
+    }
+
+    // Clear the cart (alternative to deleteOne might be setting an empty array if preferred)
+    cart.items = []; // Assuming 'items' is the field storing cart items
+    await cart.save();
+    
+    res.json({ msg: 'Cart cleared', cart });
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Server Error');

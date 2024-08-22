@@ -11,19 +11,17 @@ const authRouter = require('./routes/auth');
 const profileRouter = require('./routes/Profile');
 const cartRouter = require('./routes/Cart');
 const cookieParser = require('cookie-parser');
-const orderRouter = require('./routes/payment');
+const paymentRouter = require('./routes/payment');
+const orderRouter = require('./routes/Order')
 
-
-const pathe = require('path');
-const path = require('path');
 const app = express();
 
 // Use cookie-parser middleware
 app.use(cookieParser());
 
 app.use(cors({
-  origin: 'https://dripz-frontend.vercel.app', 
-  // origin: 'http://localhost:3000', 
+  // origin: 'https://dripz-frontend.vercel.app', 
+  origin: 'http://localhost:3000', 
   credentials: true // Allow credentials
 }));
 const apiLimiter = rateLimit({
@@ -61,7 +59,7 @@ app.use(productRouter);
 app.use(profileRouter);
 app.use(cartRouter); 
 app.use(orderRouter);
-// app.use(paymentRouter); 
+app.use(paymentRouter); 
 
 
 
